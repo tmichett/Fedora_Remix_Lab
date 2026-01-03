@@ -1,0 +1,20 @@
+# Fedora Lab Ansible Inventory
+# Generated for use with the Fedora Remix Lab environment
+
+[control]
+localhost ansible_connection=local
+
+[nodes]
+fedoralab1.example.com
+fedoralab2.example.com
+
+[nodes:vars]
+ansible_user=ansibleuser
+ansible_ssh_pass=Automation!
+ansible_become=yes
+ansible_become_method=sudo
+
+[lab:children]
+control
+nodes
+

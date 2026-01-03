@@ -90,40 +90,40 @@ sudo systemctl enable --now libvirtd
 The lab uses a **copy-on-write overlay** architecture to efficiently manage disk images. This approach keeps the base image pristine while allowing each VM to have its own independent storage.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        BASE IMAGE                                │
-│                    Fedora43Lab.qcow2                             │
-│                       (Original)                                 │
-│                                                                  │
-│  • Never modified after initial copy                             │
-│  • Shared as backing file for all VMs                            │
-│  • Located at: /var/lib/libvirt/images/Fedora43Lab.qcow2        │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-                          │ backing file reference
-                          │
-          ┌───────────────┴───────────────┐
-          │                               │
-          ▼                               ▼
-┌─────────────────────┐       ┌─────────────────────┐
-│   OVERLAY IMAGE     │       │   OVERLAY IMAGE     │
-│  FedoraLab1.qcow2   │       │  FedoraLab2.qcow2   │
-│                     │       │                     │
-│ • Stores differences│       │ • Stores differences│
-│   from base image   │       │   from base image   │
-│ • Contains:         │       │ • Contains:         │
-│   - Customizations  │       │   - Customizations  │
-│   - Runtime changes │       │   - Runtime changes │
-│ • Starts small,     │       │ • Starts small,     │
-│   grows with use    │       │   grows with use    │
-└─────────────────────┘       └─────────────────────┘
-          │                               │
-          ▼                               ▼
-┌─────────────────────┐       ┌─────────────────────┐
-│    FedoraLab1 VM    │       │    FedoraLab2 VM    │
-│  192.168.100.10     │◄─────►│  192.168.100.11     │
-│                     │ labnet│                     │
-└─────────────────────┘       └─────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                          BASE IMAGE                           │
+│                      Fedora43Lab.qcow2                        │
+│                          (Original)                           │
+│                                                               │
+│   • Never modified after initial copy                         │
+│   • Shared as backing file for all VMs                        │
+│   • Located at: /var/lib/libvirt/images/Fedora43Lab.qcow2     │
+└───────────────────────────────┬───────────────────────────────┘
+                                │
+                                │ backing file reference
+                                │
+            ┌───────────────────┴───────────────────┐
+            │                                       │
+            ▼                                       ▼
+┌───────────────────────┐           ┌───────────────────────┐
+│     OVERLAY IMAGE     │           │     OVERLAY IMAGE     │
+│   FedoraLab1.qcow2    │           │   FedoraLab2.qcow2    │
+│                       │           │                       │
+│ • Stores differences  │           │ • Stores differences  │
+│   from base image     │           │   from base image     │
+│ • Contains:           │           │ • Contains:           │
+│   - Customizations    │           │   - Customizations    │
+│   - Runtime changes   │           │   - Runtime changes   │
+│ • Starts small,       │           │ • Starts small,       │
+│   grows with use      │           │   grows with use      │
+└───────────────────────┘           └───────────────────────┘
+            │                                       │
+            ▼                                       ▼
+┌───────────────────────┐           ┌───────────────────────┐
+│     FedoraLab1 VM     │           │     FedoraLab2 VM     │
+│    192.168.100.10     │◄─────────►│    192.168.100.11     │
+│                       │   labnet  │                       │
+└───────────────────────┘           └───────────────────────┘
 ```
 
 ### Creation Process
@@ -164,30 +164,30 @@ The lab uses a **copy-on-write overlay** architecture to efficiently manage disk
 ### Network Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         HOST MACHINE                             │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                    labnet (virbr-lab)                    │    │
-│  │                   192.168.100.0/24                       │    │
-│  │                                                          │    │
-│  │  Gateway: 192.168.100.1 (NAT to external network)       │    │
-│  │                                                          │    │
-│  │  DHCP Reservations:                                      │    │
-│  │    52:54:00:1a:b0:aa → 192.168.100.10 (FedoraLab1)      │    │
-│  │    52:54:00:1a:b0:bb → 192.168.100.11 (FedoraLab2)      │    │
-│  │                                                          │    │
-│  │  DNS: fedoralab1.example.com, fedoralab2.example.com    │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                          │                                       │
-│            ┌─────────────┴─────────────┐                        │
-│            │                           │                        │
-│     ┌──────┴──────┐             ┌──────┴──────┐                 │
-│     │ FedoraLab1  │             │ FedoraLab2  │                 │
-│     │ .10         │◄───────────►│ .11         │                 │
-│     └─────────────┘             └─────────────┘                 │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                         HOST MACHINE                          │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │                   labnet (virbr-lab)                    │  │
+│  │                   192.168.100.0/24                      │  │
+│  │                                                         │  │
+│  │  Gateway: 192.168.100.1 (NAT to external network)       │  │
+│  │                                                         │  │
+│  │  DHCP Reservations:                                     │  │
+│  │    52:54:00:1a:b0:aa → 192.168.100.10 (FedoraLab1)      │  │
+│  │    52:54:00:1a:b0:bb → 192.168.100.11 (FedoraLab2)      │  │
+│  │                                                         │  │
+│  │  DNS: fedoralab1.example.com, fedoralab2.example.com    │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                             │                                 │
+│               ┌─────────────┴─────────────┐                   │
+│               │                           │                   │
+│        ┌──────┴──────┐             ┌──────┴──────┐            │
+│        │ FedoraLab1  │             │ FedoraLab2  │            │
+│        │    .10      │◄───────────►│    .11      │            │
+│        └─────────────┘             └─────────────┘            │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 The VMs use static IPs assigned via DHCP reservations based on MAC address. This ensures consistent IP addresses across reboots while still using DHCP for network configuration.

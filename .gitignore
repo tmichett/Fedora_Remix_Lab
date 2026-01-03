@@ -1,0 +1,3 @@
+# QCOW2 disk images (too large for git)
+*.qcow2
+

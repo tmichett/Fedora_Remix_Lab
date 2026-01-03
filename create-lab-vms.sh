@@ -133,8 +133,9 @@ customize_image() {
         --write "/etc/vconsole.conf:KEYMAP=us" \
         --run-command "useradd -m -G wheel -s /bin/bash ${VM_USER} 2>/dev/null || true" \
         --password "${VM_USER}:password:${VM_PASSWORD}" \
-        --write "/etc/sudoers.d/${VM_USER}:${VM_USER} ALL=(ALL) NOPASSWD:ALL" \
+        --run-command "echo '${VM_USER} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${VM_USER}" \
         --run-command "chmod 440 /etc/sudoers.d/${VM_USER}" \
+        --run-command "chown root:root /etc/sudoers.d/${VM_USER}" \
         --run-command "rm -f /etc/systemd/system/multi-user.target.wants/initial-setup.service" \
         --run-command "rm -f /etc/systemd/system/graphical.target.wants/initial-setup.service" \
         --run-command "rm -f /usr/lib/systemd/system/initial-setup.service" \

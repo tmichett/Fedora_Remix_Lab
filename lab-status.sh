@@ -364,7 +364,7 @@ show_status() {
     echo "  Stop all VMs:         sudo virsh shutdown FedoraLab1 && sudo virsh shutdown FedoraLab2"
     echo "  Connect to VM:        sudo virt-viewer FedoraLab1"
     echo "  SSH to VM:            ssh ansibleuser@fedoralab1.example.com"
-    echo "  Recreate VMs:         sudo ./create-lab-vms.sh"
+    echo "  Reset Lab:            sudo ./reset-lab.sh"
     echo "  Lab Status:           sudo ./lab-status.sh"
     echo ""
 }

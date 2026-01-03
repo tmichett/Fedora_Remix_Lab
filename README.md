@@ -255,6 +255,33 @@ sudo ./manage-hosts.sh update
 ./manage-hosts.sh status
 ```
 
+### reset-lab.sh
+
+Destroys and recreates the entire lab environment. Useful for starting fresh.
+
+```bash
+# Full reset with confirmation prompt
+sudo ./reset-lab.sh
+
+# Full reset without confirmation
+sudo ./reset-lab.sh -y
+
+# Reset only VMs, keep the network
+sudo ./reset-lab.sh --vms-only
+
+# Only destroy, don't recreate
+sudo ./reset-lab.sh --destroy-only
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--full` | Full reset including network (default) |
+| `--vms-only` | Reset only VMs, keep the network intact |
+| `--destroy-only` | Only destroy, don't recreate |
+| `-y, --yes` | Skip confirmation prompt |
+
 ## Common Tasks
 
 ### Start the Lab
@@ -298,7 +325,20 @@ ssh ansibleuser@192.168.100.11
 
 ### Reset the Lab
 
-To completely recreate the lab (destroys all VM data):
+Use the reset script to completely recreate the lab (destroys all VM data):
+
+```bash
+# Full reset (with confirmation)
+sudo ./reset-lab.sh
+
+# Full reset (skip confirmation)
+sudo ./reset-lab.sh -y
+
+# Reset VMs only, keep network
+sudo ./reset-lab.sh --vms-only
+```
+
+Or manually:
 
 ```bash
 # Stop VMs

@@ -3,6 +3,7 @@
 # create-lab-vms.sh
 # Creates two VMs (FedoraLab1 and FedoraLab2) using a shared QCOW2 backing image
 # Generates libvirt XML files that can be imported into KVM/Virt Manager
+# Creates a dedicated virtual network with static IPs
 # Uses virt-customize to pre-configure user and locale settings
 #
 
@@ -14,6 +15,19 @@ BASE_IMAGE_SRC="${SCRIPT_DIR}/Fedora43Lab.qcow2"
 LIBVIRT_IMAGES="/var/lib/libvirt/images"
 BASE_IMAGE="${LIBVIRT_IMAGES}/Fedora43Lab.qcow2"
 VM_DIR="${LIBVIRT_IMAGES}/fedora-lab"
+
+# Network Configuration
+NETWORK_NAME="labnet"
+NETWORK_BRIDGE="virbr-lab"
+NETWORK_SUBNET="192.168.100"
+NETWORK_NETMASK="255.255.255.0"
+NETWORK_GATEWAY="${NETWORK_SUBNET}.1"
+DOMAIN_NAME="example.com"
+
+# VM Definitions (name, IP suffix, MAC suffix)
+declare -A VM_CONFIG
+VM_CONFIG["FedoraLab1"]="10:aa"   # IP: .10, MAC ends with :aa
+VM_CONFIG["FedoraLab2"]="11:bb"   # IP: .11, MAC ends with :bb
 VM_NAMES=("FedoraLab1" "FedoraLab2")
 
 # VM Resources
@@ -64,11 +78,110 @@ check_dependencies() {
         missing+=("libguestfs-tools")
     fi
     
+    if ! command -v virsh &> /dev/null; then
+        missing+=("libvirt-client")
+    fi
+    
     if [[ ${#missing[@]} -gt 0 ]]; then
         error "Missing required tools: ${missing[*]}\nInstall with: sudo dnf install ${missing[*]}"
     fi
     
     info "All dependencies satisfied"
+}
+
+# Get VM IP address from config
+get_vm_ip() {
+    local vm_name="$1"
+    local config="${VM_CONFIG[$vm_name]}"
+    local ip_suffix="${config%%:*}"
+    echo "${NETWORK_SUBNET}.${ip_suffix}"
+}
+
+# Get VM MAC address from config
+get_vm_mac() {
+    local vm_name="$1"
+    local config="${VM_CONFIG[$vm_name]}"
+    local mac_suffix="${config##*:}"
+    echo "52:54:00:1a:b0:${mac_suffix}"
+}
+
+# Get VM FQDN
+get_vm_fqdn() {
+    local vm_name="$1"
+    echo "${vm_name,,}.${DOMAIN_NAME}"
+}
+
+# Create the lab network
+create_network() {
+    info "Checking lab network: ${NETWORK_NAME}..."
+    
+    # Check if network already exists
+    if virsh net-info "${NETWORK_NAME}" &>/dev/null; then
+        warn "Network ${NETWORK_NAME} already exists"
+        read -p "Recreate network? This will destroy and recreate it (y/N): " response
+        if [[ "${response}" =~ ^[Yy]$ ]]; then
+            info "Removing existing network..."
+            virsh net-destroy "${NETWORK_NAME}" 2>/dev/null || true
+            virsh net-undefine "${NETWORK_NAME}" 2>/dev/null || true
+        else
+            info "Keeping existing network"
+            return
+        fi
+    fi
+    
+    info "Creating lab network: ${NETWORK_NAME}..."
+    
+    # Build DHCP host entries for static IPs
+    local dhcp_hosts=""
+    for vm_name in "${VM_NAMES[@]}"; do
+        local mac
+        mac=$(get_vm_mac "${vm_name}")
+        local ip
+        ip=$(get_vm_ip "${vm_name}")
+        local fqdn
+        fqdn=$(get_vm_fqdn "${vm_name}")
+        dhcp_hosts+="      <host mac='${mac}' name='${fqdn}' ip='${ip}'/>\n"
+    done
+    
+    # Create network XML
+    local network_xml="${VM_DIR}/${NETWORK_NAME}.xml"
+    cat > "${network_xml}" << EOF
+<network>
+  <name>${NETWORK_NAME}</name>
+  <forward mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+  </forward>
+  <bridge name='${NETWORK_BRIDGE}' stp='on' delay='0'/>
+  <domain name='${DOMAIN_NAME}' localOnly='yes'/>
+  <dns>
+    <host ip='${NETWORK_SUBNET}.10'>
+      <hostname>fedoralab1</hostname>
+      <hostname>fedoralab1.${DOMAIN_NAME}</hostname>
+    </host>
+    <host ip='${NETWORK_SUBNET}.11'>
+      <hostname>fedoralab2</hostname>
+      <hostname>fedoralab2.${DOMAIN_NAME}</hostname>
+    </host>
+  </dns>
+  <ip address='${NETWORK_GATEWAY}' netmask='${NETWORK_NETMASK}'>
+    <dhcp>
+      <range start='${NETWORK_SUBNET}.100' end='${NETWORK_SUBNET}.200'/>
+$(echo -e "${dhcp_hosts}")
+    </dhcp>
+  </ip>
+</network>
+EOF
+
+    # Define and start the network
+    virsh net-define "${network_xml}"
+    virsh net-start "${NETWORK_NAME}"
+    virsh net-autostart "${NETWORK_NAME}"
+    
+    info "Network ${NETWORK_NAME} created and started"
+    info "  Subnet: ${NETWORK_SUBNET}.0/24"
+    info "  Gateway: ${NETWORK_GATEWAY}"
 }
 
 # Check if base image exists and copy to libvirt directory
@@ -112,22 +225,53 @@ create_overlay_image() {
     info "Created: ${overlay_path}"
 }
 
+# Generate /etc/hosts content for VMs
+generate_hosts_content() {
+    local hosts_content="127.0.0.1   localhost localhost.localdomain\n"
+    hosts_content+="::1         localhost localhost.localdomain\n\n"
+    hosts_content+="# Lab VMs\n"
+    
+    for vm_name in "${VM_NAMES[@]}"; do
+        local ip
+        ip=$(get_vm_ip "${vm_name}")
+        local fqdn
+        fqdn=$(get_vm_fqdn "${vm_name}")
+        local short_name="${vm_name,,}"
+        hosts_content+="${ip}   ${fqdn} ${short_name}\n"
+    done
+    
+    echo -e "${hosts_content}"
+}
+
 # Customize the VM image with user and locale settings
 customize_image() {
     local vm_name="$1"
     local overlay_path="${VM_DIR}/${vm_name}.qcow2"
+    local vm_ip
+    vm_ip=$(get_vm_ip "${vm_name}")
+    local vm_fqdn
+    vm_fqdn=$(get_vm_fqdn "${vm_name}")
+    local vm_hostname="${vm_name,,}"
     
     info "Customizing ${vm_name} with virt-customize..."
     info "  - Creating user: ${VM_USER}"
     info "  - Setting locale: ${VM_LOCALE}"
     info "  - Setting timezone: ${VM_TIMEZONE}"
-    info "  - Setting hostname: ${vm_name}"
+    info "  - Setting hostname: ${vm_fqdn}"
+    info "  - Static IP: ${vm_ip}"
+    
+    # Generate hosts file content
+    local hosts_content
+    hosts_content=$(generate_hosts_content)
+    
+    # Create a temporary directory with hosts file
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    echo -e "${hosts_content}" > "${temp_dir}/hosts"
     
     # Use virt-customize to configure the image
-    # Note: We use direct file manipulation instead of systemctl/localectl
-    # because those commands require a running systemd
     virt-customize -a "${overlay_path}" \
-        --hostname "${vm_name}" \
+        --hostname "${vm_fqdn}" \
         --timezone "${VM_TIMEZONE}" \
         --write "/etc/locale.conf:LANG=${VM_LOCALE}" \
         --write "/etc/vconsole.conf:KEYMAP=us" \
@@ -136,6 +280,8 @@ customize_image() {
         --run-command "echo '${VM_USER} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${VM_USER}" \
         --run-command "chmod 440 /etc/sudoers.d/${VM_USER}" \
         --run-command "chown root:root /etc/sudoers.d/${VM_USER}" \
+        --copy-in "${temp_dir}/hosts:/etc/" \
+        --run-command "chmod 644 /etc/hosts" \
         --run-command "rm -f /etc/systemd/system/multi-user.target.wants/initial-setup.service" \
         --run-command "rm -f /etc/systemd/system/graphical.target.wants/initial-setup.service" \
         --run-command "rm -f /usr/lib/systemd/system/initial-setup.service" \
@@ -143,6 +289,8 @@ customize_image() {
         --run-command "mkdir -p /etc/sysconfig && touch /etc/sysconfig/initial-setup-reconfiguration-complete" \
         --run-command "mkdir -p /var/lib/initial-setup && touch /var/lib/initial-setup/state" \
         --selinux-relabel
+    
+    rm -rf "${temp_dir}"
     
     chown qemu:qemu "${overlay_path}"
     chmod 644 "${overlay_path}"
@@ -155,17 +303,16 @@ generate_xml() {
     local vm_name="$1"
     local xml_path="${VM_DIR}/${vm_name}.xml"
     local disk_path="${VM_DIR}/${vm_name}.qcow2"
+    local mac_address
+    mac_address=$(get_vm_mac "${vm_name}")
     
     # Generate a unique UUID for each VM
     local uuid
     uuid=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || echo "$(date +%s)-${vm_name}" | md5sum | sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\)\(..\).*/\1\2\3\4-\5\6-\7\8-\9\10-\11\12\13\14\15\16/')
     
-    # Generate unique MAC address (using locally administered address range)
-    local mac_suffix
-    mac_suffix=$(printf '%02x:%02x:%02x' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)))
-    local mac_address="52:54:00:${mac_suffix}"
-    
     info "Generating XML for ${vm_name}..."
+    info "  - MAC: ${mac_address}"
+    info "  - Network: ${NETWORK_NAME}"
     
     cat > "${xml_path}" << EOF
 <domain type='kvm'>
@@ -251,7 +398,7 @@ generate_xml() {
     </controller>
     <interface type='network'>
       <mac address='${mac_address}'/>
-      <source network='default'/>
+      <source network='${NETWORK_NAME}'/>
       <model type='virtio'/>
       <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
     </interface>
@@ -313,6 +460,34 @@ EOF
     info "Created: ${xml_path}"
 }
 
+# Generate hosts file for the host machine
+generate_host_hosts_file() {
+    local hosts_file="${SCRIPT_DIR}/hosts.local"
+    
+    info "Generating hosts file for host machine: ${hosts_file}"
+    
+    cat > "${hosts_file}" << EOF
+# Fedora Lab VMs - Add these entries to /etc/hosts on the host machine
+# Generated by create-lab-vms.sh on $(date)
+#
+# To add to your system:
+#   sudo cat ${hosts_file} >> /etc/hosts
+# Or manually add the following lines:
+
+EOF
+
+    for vm_name in "${VM_NAMES[@]}"; do
+        local ip
+        ip=$(get_vm_ip "${vm_name}")
+        local fqdn
+        fqdn=$(get_vm_fqdn "${vm_name}")
+        local short_name="${vm_name,,}"
+        echo "${ip}   ${fqdn} ${short_name}" >> "${hosts_file}"
+    done
+    
+    info "Created: ${hosts_file}"
+}
+
 # Main execution
 main() {
     echo "========================================"
@@ -329,6 +504,13 @@ main() {
     info "VM directory: ${VM_DIR}"
     echo ""
     
+    # Create the lab network
+    echo "----------------------------------------"
+    echo "Setting up Lab Network"
+    echo "----------------------------------------"
+    create_network
+    echo ""
+    
     # Create overlay images and XML files for each VM
     for vm_name in "${VM_NAMES[@]}"; do
         echo "----------------------------------------"
@@ -340,30 +522,40 @@ main() {
         echo ""
     done
     
+    # Generate hosts file for host machine
+    echo "----------------------------------------"
+    echo "Generating Host Files"
+    echo "----------------------------------------"
+    generate_host_hosts_file
+    echo ""
+    
     echo "========================================"
     echo "  Setup Complete!"
     echo "========================================"
     echo ""
+    echo "Network: ${NETWORK_NAME}"
+    echo "  Subnet: ${NETWORK_SUBNET}.0/24"
+    echo "  Gateway: ${NETWORK_GATEWAY}"
+    echo ""
     echo "VM Configuration:"
     echo "  - User: ${VM_USER}"
     echo "  - Password: ${VM_PASSWORD}"
-    echo "  - Locale: ${VM_LOCALE}"
-    echo "  - Timezone: ${VM_TIMEZONE}"
     echo "  - Sudo: passwordless"
     echo ""
-    echo "To import the VMs into libvirt/Virt Manager, run:"
-    echo ""
+    echo "VM IP Addresses:"
     for vm_name in "${VM_NAMES[@]}"; do
-        echo "  sudo virsh define ${VM_DIR}/${vm_name}.xml"
+        local ip
+        ip=$(get_vm_ip "${vm_name}")
+        local fqdn
+        fqdn=$(get_vm_fqdn "${vm_name}")
+        echo "  ${vm_name}: ${ip} (${fqdn})"
     done
     echo ""
-    echo "To start a VM:"
+    echo "To add hosts to your local /etc/hosts, run:"
+    echo "  sudo bash -c 'cat ${SCRIPT_DIR}/hosts.local >> /etc/hosts'"
     echo ""
-    for vm_name in "${VM_NAMES[@]}"; do
-        echo "  sudo virsh start ${vm_name}"
-    done
-    echo ""
-    echo "Or simply open Virt Manager and import the XML files manually."
+    echo "To start the VMs, run:"
+    echo "  sudo ${SCRIPT_DIR}/start-lab-vms.sh"
     echo ""
 }
 

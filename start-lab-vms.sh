@@ -11,6 +11,9 @@ LIBVIRT_IMAGES="/var/lib/libvirt/images"
 VM_DIR="${LIBVIRT_IMAGES}/fedora-lab"
 VM_NAMES=("FedoraLab1" "FedoraLab2")
 
+# Network Configuration
+NETWORK_NAME="labnet"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -49,19 +52,17 @@ check_libvirt() {
     info "libvirtd is running"
 }
 
-# Check if default network is active
+# Check if lab network is active
 check_network() {
-    if ! virsh net-info default &>/dev/null; then
-        warn "Default network not found. Creating..."
-        virsh net-define /usr/share/libvirt/networks/default.xml 2>/dev/null || true
+    if ! virsh net-info "${NETWORK_NAME}" &>/dev/null; then
+        error "Lab network '${NETWORK_NAME}' not found. Run create-lab-vms.sh first!"
     fi
     
-    if ! virsh net-info default 2>/dev/null | grep -q "Active:.*yes"; then
-        info "Starting default network..."
-        virsh net-start default 2>/dev/null || true
-        virsh net-autostart default 2>/dev/null || true
+    if ! virsh net-info "${NETWORK_NAME}" 2>/dev/null | grep -q "Active:.*yes"; then
+        info "Starting ${NETWORK_NAME} network..."
+        virsh net-start "${NETWORK_NAME}" 2>/dev/null || true
     fi
-    info "Default network is available"
+    info "Lab network '${NETWORK_NAME}' is available"
 }
 
 # Register a VM if not already defined

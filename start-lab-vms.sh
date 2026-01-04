@@ -151,8 +151,8 @@ main() {
     show_status
     echo ""
     echo "To connect to a VM, use:"
-    echo "  virt-viewer FedoraLab1"
-    echo "  virt-viewer FedoraLab2"
+    echo "  sudo virt-viewer FedoraLab1"
+    echo "  sudo virt-viewer FedoraLab2"
     echo ""
     echo "Or open Virt Manager to access the VMs."
     echo ""

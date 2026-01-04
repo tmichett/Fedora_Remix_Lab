@@ -2,7 +2,11 @@
 
 This guide assumes you're using a Fedora Remix Lab ISO where the lab scripts are pre-installed.
 
-## 🚀 Getting Started (3 Steps)
+---
+
+## 🏗️ Initial Setup (One-Time Only)
+
+Run these commands **once** when first setting up your lab environment:
 
 ### Step 1: Create the Lab VMs
 
@@ -14,22 +18,29 @@ This creates:
 - **FedoraLab1** (192.168.100.10, fedoralab1.example.com)
 - **FedoraLab2** (192.168.100.11, fedoralab2.example.com)
 - A dedicated virtual network called **labnet**
+- Pre-configured user `ansibleuser` with passwordless sudo
 
-### Step 2: Start the Lab VMs
-
-```bash
-sudo lab-start-lab-vms
-```
-
-This registers and starts both VMs. Wait about 30 seconds for them to fully boot.
-
-### Step 3: Configure Host Resolution
+### Step 2: Configure Host Resolution
 
 ```bash
 sudo lab-manage-hosts add
 ```
 
 This adds the VM hostnames to your `/etc/hosts` file so you can reach them by name.
+
+> **Note:** After initial setup, you only need to start the VMs when you want to use them.
+
+---
+
+## 🚀 Starting Your Lab
+
+After initial setup, use this command to start your lab:
+
+```bash
+sudo lab-start-lab-vms
+```
+
+This registers and starts both VMs. Wait about 30 seconds for them to fully boot.
 
 ---
 
@@ -74,13 +85,24 @@ sudo virt-viewer FedoraLab2
 
 ## 🔧 Available Commands
 
+### Daily Use
 | Command | Description |
 |---------|-------------|
-| `sudo lab-create-lab-vms` | Create VMs and network |
-| `sudo lab-start-lab-vms` | Register and start VMs |
+| `sudo lab-start-lab-vms` | Start the lab VMs |
 | `sudo lab-lab-status` | Show lab status |
+| `sudo virsh shutdown FedoraLab1` | Shutdown a VM |
+| `sudo virsh shutdown FedoraLab2` | Shutdown a VM |
+
+### Initial Setup (One-Time)
+| Command | Description |
+|---------|-------------|
+| `sudo lab-create-lab-vms` | Create VMs and network (run once) |
+| `sudo lab-manage-hosts add` | Add VM entries to /etc/hosts (run once) |
+
+### Maintenance
+| Command | Description |
+|---------|-------------|
 | `sudo lab-reset-lab` | Destroy and recreate VMs |
-| `sudo lab-manage-hosts add` | Add VM entries to /etc/hosts |
 | `sudo lab-manage-hosts remove` | Remove VM entries from /etc/hosts |
 | `sudo lab-manage-hosts status` | Check hosts file status |
 
@@ -205,10 +227,12 @@ sudo lab-manage-hosts add
 
 ## 💡 Tips
 
-1. **Always use sudo** - All lab commands require root privileges
-2. **Wait for boot** - Give VMs 30-60 seconds to fully boot before connecting
-3. **Check status first** - Use `sudo lab-lab-status` to diagnose issues
-4. **Reset is your friend** - When in doubt, `sudo lab-reset-lab` fixes most problems
+1. **Setup is one-time** - Run `lab-create-lab-vms` and `lab-manage-hosts add` only once
+2. **Daily use** - Just run `sudo lab-start-lab-vms` to start your lab each session
+3. **Always use sudo** - All lab commands require root privileges
+4. **Wait for boot** - Give VMs 30-60 seconds to fully boot before connecting
+5. **Check status first** - Use `sudo lab-lab-status` to diagnose issues
+6. **Reset is your friend** - When in doubt, `sudo lab-reset-lab` fixes most problems
 
 ---
 

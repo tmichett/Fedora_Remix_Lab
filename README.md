@@ -18,7 +18,10 @@ sudo systemctl enable --now libvirtd
 
 ## Quick Start
 
-1. Place your Fedora QCOW2 image in this directory as `Fedora43Lab.qcow2`
+1. Download the base image (or place your own `Fedora43Lab.qcow2` in this directory):
+   ```bash
+   ./download-image.sh
+   ```
 
 2. Create the lab environment:
    ```bash
@@ -194,7 +197,19 @@ The VMs use static IPs assigned via DHCP reservations based on MAC address. This
 
 ## Scripts
 
-> **Note:** All scripts require `sudo` to interact with libvirt system domains.
+> **Note:** Most scripts require `sudo` to interact with libvirt system domains.
+
+### download-image.sh
+
+Downloads the Fedora43Lab.qcow2 base image from Google Drive if not present.
+
+```bash
+./download-image.sh
+```
+
+- Checks if the image already exists
+- Uses `gdown` for reliable large file downloads from Google Drive
+- Offers to install `gdown` if not present
 
 ### create-lab-vms.sh
 

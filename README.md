@@ -201,15 +201,17 @@ The VMs use static IPs assigned via DHCP reservations based on MAC address. This
 
 ### download-image.sh
 
-Downloads the Fedora43Lab.qcow2 base image from Google Drive if not present.
+Downloads the Fedora43Lab.qcow2 base image from Google Drive to `/var/lib/libvirt/images/`.
 
 ```bash
-./download-image.sh
+sudo ./download-image.sh
 ```
 
-- Checks if the image already exists
+- Downloads directly to libvirt's standard image location
+- Sets proper ownership (`qemu:qemu`) and permissions
 - Uses `gdown` for reliable large file downloads from Google Drive
 - Offers to install `gdown` if not present
+- Requires `sudo` to write to `/var/lib/libvirt/images/`
 
 ### create-lab-vms.sh
 
@@ -395,11 +397,12 @@ ssh fedoralab2
 
 | File | Location |
 |------|----------|
-| Base image (copy) | `/var/lib/libvirt/images/Fedora43Lab.qcow2` |
-| VM overlay disks | `/var/lib/libvirt/images/fedora-lab/` |
+| Base image | `/var/lib/libvirt/images/Fedora43Lab.qcow2` |
+| VM overlay disks | `/var/lib/libvirt/images/fedora-lab/*.qcow2` |
 | VM XML definitions | `/var/lib/libvirt/images/fedora-lab/*.xml` |
 | Network XML | `/var/lib/libvirt/images/fedora-lab/labnet.xml` |
 | Local hosts file | `./hosts.local` |
+| Ansible inventory | `./inventory` |
 
 ## Troubleshooting
 

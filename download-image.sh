@@ -1,14 +1,15 @@
 #!/bin/bash
 #
 # download-image.sh
-# Downloads the Fedora43Lab.qcow2 base image from Google Drive if not present
+# Downloads the Fedora43Lab.qcow2 base image from Google Drive to libvirt images directory
 #
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Configuration
 IMAGE_NAME="Fedora43Lab.qcow2"
-IMAGE_PATH="${SCRIPT_DIR}/${IMAGE_NAME}"
+LIBVIRT_IMAGES="/var/lib/libvirt/images"
+IMAGE_PATH="${LIBVIRT_IMAGES}/${IMAGE_NAME}"
 
 # Google Drive file ID extracted from the share link
 # https://drive.google.com/file/d/1aMNna4AhHaRvQoEEK5XL8rGINnSEgTIN/view?usp=drive_link
@@ -32,6 +33,13 @@ warn() {
 error() {
     echo -e "${RED}[ERROR]${NC} $1"
     exit 1
+}
+
+# Check if running as root
+check_privileges() {
+    if [[ $EUID -ne 0 ]]; then
+        error "This script must be run with sudo or as root\n  sudo $0"
+    fi
 }
 
 # Check if gdown is installed, install if needed
@@ -61,12 +69,20 @@ check_gdown() {
 download_with_gdown() {
     info "Downloading ${IMAGE_NAME} from Google Drive..."
     info "File ID: ${GDRIVE_FILE_ID}"
+    info "Destination: ${IMAGE_PATH}"
     echo ""
     
-    cd "${SCRIPT_DIR}"
+    # Ensure directory exists
+    mkdir -p "${LIBVIRT_IMAGES}"
+    
+    cd "${LIBVIRT_IMAGES}"
     gdown "${GDRIVE_FILE_ID}" -O "${IMAGE_NAME}"
     
     if [[ -f "${IMAGE_PATH}" ]]; then
+        # Set proper ownership and permissions for libvirt
+        chown qemu:qemu "${IMAGE_PATH}"
+        chmod 644 "${IMAGE_PATH}"
+        
         local size
         size=$(du -h "${IMAGE_PATH}" | cut -f1)
         info "Download complete: ${IMAGE_PATH} (${size})"
@@ -80,9 +96,10 @@ download_with_curl() {
     info "Attempting download with curl..."
     warn "Note: Large files may require confirmation. Consider installing gdown."
     
-    local confirm_url="https://drive.google.com/uc?export=download&id=${GDRIVE_FILE_ID}"
+    # Ensure directory exists
+    mkdir -p "${LIBVIRT_IMAGES}"
     
-    cd "${SCRIPT_DIR}"
+    cd "${LIBVIRT_IMAGES}"
     
     # First attempt - may get confirmation page for large files
     curl -L -o "${IMAGE_NAME}" \
@@ -93,6 +110,9 @@ download_with_curl() {
         size=$(du -h "${IMAGE_PATH}" | cut -f1)
         # Check if we got the actual file or just an HTML page
         if file "${IMAGE_PATH}" | grep -q "QEMU QCOW"; then
+            # Set proper ownership and permissions for libvirt
+            chown qemu:qemu "${IMAGE_PATH}"
+            chmod 644 "${IMAGE_PATH}"
             info "Download complete: ${IMAGE_PATH} (${size})"
         else
             rm -f "${IMAGE_PATH}"
@@ -110,6 +130,8 @@ main() {
     echo "  Fedora Lab Image Downloader"
     echo "════════════════════════════════════════════════════════════"
     echo ""
+    
+    check_privileges
     
     # Check if image already exists
     if [[ -f "${IMAGE_PATH}" ]]; then
@@ -131,8 +153,9 @@ main() {
     # Download the image
     info "Image not found. Downloading..."
     echo ""
-    echo "Source: Google Drive"
-    echo "File:   ${IMAGE_NAME}"
+    echo "Source:      Google Drive"
+    echo "File:        ${IMAGE_NAME}"
+    echo "Destination: ${LIBVIRT_IMAGES}/"
     echo ""
     
     # Prefer gdown for reliable large file downloads
@@ -168,10 +191,11 @@ main() {
     echo "  Download Complete!"
     echo "════════════════════════════════════════════════════════════"
     echo ""
+    echo "Base image location: ${IMAGE_PATH}"
+    echo ""
     echo "You can now create the lab environment:"
     echo "  sudo ./create-lab-vms.sh"
     echo ""
 }
 
 main "$@"
-

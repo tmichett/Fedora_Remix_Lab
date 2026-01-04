@@ -11,7 +11,6 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_IMAGE_SRC="${SCRIPT_DIR}/Fedora43Lab.qcow2"
 LIBVIRT_IMAGES="/var/lib/libvirt/images"
 BASE_IMAGE="${LIBVIRT_IMAGES}/Fedora43Lab.qcow2"
 VM_DIR="${LIBVIRT_IMAGES}/fedora-lab"
@@ -186,23 +185,15 @@ EOF
 
 # Check if base image exists and copy to libvirt directory
 check_base_image() {
-    if [[ ! -f "${BASE_IMAGE_SRC}" ]]; then
-        error "Source base image not found: ${BASE_IMAGE_SRC}"
-    fi
-    
     # Create libvirt images directory if needed
     mkdir -p "${LIBVIRT_IMAGES}"
     
-    # Copy base image to libvirt directory if not already there
+    # Check if base image exists
     if [[ ! -f "${BASE_IMAGE}" ]]; then
-        info "Copying base image to libvirt images directory..."
-        cp "${BASE_IMAGE_SRC}" "${BASE_IMAGE}"
-        chown qemu:qemu "${BASE_IMAGE}"
-        chmod 644 "${BASE_IMAGE}"
-        info "Base image copied to: ${BASE_IMAGE}"
-    else
-        info "Base image already exists: ${BASE_IMAGE}"
+        error "Base image not found: ${BASE_IMAGE}\n\nRun the download script first:\n  sudo ./download-image.sh"
     fi
+    
+    info "Base image found: ${BASE_IMAGE}"
 }
 
 # Create and customize overlay image for a VM

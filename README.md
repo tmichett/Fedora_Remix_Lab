@@ -2,6 +2,8 @@
 
 A collection of scripts to create and manage a Fedora-based virtual lab environment using KVM/libvirt. This lab creates two VMs that can communicate with each other, perfect for testing Ansible automation, clustering, or multi-node applications.
 
+> **📘 Using Fedora Remix Lab ISO?** See the [Quick Start Guide](QUICKSTART.md) for streamlined instructions when the lab is pre-installed.
+
 ## Prerequisites
 
 Install the required packages:

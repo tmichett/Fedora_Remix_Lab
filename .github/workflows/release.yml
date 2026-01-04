@@ -1,0 +1,74 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          echo "Previous tag: $PREV_TAG"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          CURRENT_TAG=${{ github.ref_name }}
+          PREV_TAG=${{ steps.prev_tag.outputs.prev_tag }}
+          
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG="## Initial Release $CURRENT_TAG"
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s" ${PREV_TAG}..${CURRENT_TAG} 2>/dev/null || echo "## Changes in $CURRENT_TAG")
+          fi
+          
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Changes in this Release
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ## Usage
+            
+            ```yaml
+            - uses: ${{ github.repository }}@${{ github.ref_name }}
+              with:
+                files: README.md
+                output_dir: Docs
+            ```
+            
+            ## Container Image
+            
+            The container image is available at:
+            - `ghcr.io/${{ github.repository_owner }}/md2pdf:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/md2pdf:latest`
+            
+            ## Full Documentation
+            
+            See [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md) for complete usage instructions.
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
